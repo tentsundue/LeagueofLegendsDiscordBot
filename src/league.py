@@ -1,45 +1,36 @@
-import requests
 import aiohttp
+import asyncio
+import sys
+sys.path.insert(1,r"C:\Users\tents\LeagueBotV_0\hidden")
+import hiddenInfo
 
-API_KEY = "RGAPI-b7978728-8d64-4cb6-b72f-8f58e7774014"
-REGION = "na1"
+API_KEY = hiddenInfo.LEAGUE_KEY
+REGION = hiddenInfo.DISCORD_KEY
 
-def getPlayerInfo(summoner_name: str):
-    response = requests.get(
-        f"https://{REGION}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}?api_key={API_KEY}")
-    if response.status_code == 200:
-        data = response.json()
-        return data
-    else:
-        return response.status_code
+playerData = list()
+async def getPlayerInfo(summoner_name: str) -> str:
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"https://na1.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}?api_key={API_KEY}", ssl=False)
+        playerData.append(await response.json())
 
-
-def getMatchIDs(puuid: str) -> list:
-    response = requests.get(
-        f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count=20&api_key={API_KEY}")
-    if response.status_code == 200:
-        data = response.json()
-        return data
-    else:
-        return response
+matchIDs = list()
+async def getMatches(puuid: str, amount=15) -> list:
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count={amount}&api_key={API_KEY}")
+        matchIDs.append(await response.json())
 
 
-def retrieveMatchKDA(matchID: str, puuid: str) -> float:
-    response = requests.get(
-        f"https://americas.api.riotgames.com/lol/match/v5/matches/{matchID}?api_key={API_KEY}")
-    matchInfo = response.json()
-    playerIndex = matchInfo['metadata']['participants'].index(puuid)
-    kda = matchInfo['info']['participants'][playerIndex]['challenges']['kda']
-    return kda
+def get_tasks(session, matchIDs: list):
+    tasks = []
+    for i in range(len(matchIDs)):
+        tasks.append(session.get(
+            f"https://americas.api.riotgames.com/lol/match/v5/matches/{matchIDs[i]}?api_key={API_KEY}", ssl=False))
+    return tasks
 
-
-def retrieveWinLoss(matchID: str, puuid: str) -> bool:
-    response = requests.get(
-        f"https://americas.api.riotgames.com/lol/match/v5/matches/{matchID}?api_key={API_KEY}")
-    if response.status_code == 200:
-        matchInfo = response.json()
-        playerIndex = matchInfo['metadata']['participants'].index(puuid)
-        wl_ratio = matchInfo['info']['participants'][playerIndex]['win']
-        return wl_ratio
-    else:
-        return response.status_code
+matchInfo = list()
+async def retrieveAllMatchInfo(matchIDs: str, puuid: str) -> float:
+    async with aiohttp.ClientSession() as session:
+        tasks = get_tasks(session, matchIDs=matchIDs)
+        responses = await asyncio.gather(*tasks)
+        for response in responses:
+            matchInfo.append(await response.json())

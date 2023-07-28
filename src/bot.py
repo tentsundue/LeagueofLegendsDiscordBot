@@ -1,118 +1,79 @@
 import discord
 from discord.ext import commands
-import requests
 import league
+import sys
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# # FOR API CALLS
-# API_KEY = "RGAPI-b7978728-8d64-4cb6-b72f-8f58e7774014"
-# REGION = "na1"
-
-
-# def getPlayerInfo(summoner_name: str):
-#     response = requests.get(
-#         f"https://{REGION}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}?api_key={API_KEY}")
-#     if response.status_code == 200:
-#         data = response.json()
-#         return data
-#     else:
-#         return response.status_code
-
-
-# def getMatchIDs(puuid: str) -> list:
-#     response = requests.get(
-#         f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count=20&api_key={API_KEY}")
-#     if response.status_code == 200:
-#         data = response.json()
-#         return data
-#     else:
-#         return response
-
-
-# def retrieveMatchKDA(matchID: str, puuid: str) -> float:
-#     response = requests.get(
-#         f"https://americas.api.riotgames.com/lol/match/v5/matches/{matchID}?api_key={API_KEY}")
-#     matchInfo = response.json()
-#     playerIndex = matchInfo['metadata']['participants'].index(puuid)
-#     kda = matchInfo['info']['participants'][playerIndex]['challenges']['kda']
-#     return kda
-
-
-# def retrieveWinLoss(matchID: str, puuid: str) -> bool:
-#     response = requests.get(
-#         f"https://americas.api.riotgames.com/lol/match/v5/matches/{matchID}?api_key={API_KEY}")
-#     if response.status_code == 200:
-#         matchInfo = response.json()
-#         playerIndex = matchInfo['metadata']['participants'].index(puuid)
-#         wl_ratio = matchInfo['info']['participants'][playerIndex]['win']
-#         return wl_ratio
-#     else:
-#         return response.status_code
-
-
 @bot.command()
-async def summoner(ctx, *, summoner_name: str):
-    playerInfo = league.getPlayerInfo(summoner_name=summoner_name)
-    if type(playerInfo) == int:
-        await ctx.send(f"Error: {playerInfo} | Please try again later")
-    else:
-        # Storing player name, level, and puuid
-        # Note: PUUID will be used for later api calls and such
-        name = playerInfo['name']
-        level = playerInfo['summonerLevel']
-        puuid = playerInfo['puuid']
+async def player(ctx, *, summoner_name: str):
+    # Getting all player's/summoner's required Information
+    await league.getPlayerInfo(summoner_name=summoner_name)
+    player = league.playerData[0]
+    name = player['name']
+    level = player['summonerLevel']
+    puuid = player['puuid']
 
-        # Calculating player's overall KDA across the last 20 matches played
-        matchIDs = league.getMatchIDs(puuid=puuid)  # List of last 20 matches
-        totalMatches = len(matchIDs)
-        kdaPerGame = 0
-        wins, losses = 0, 0
+    # Getting all matches, defaulted at 15
+    await league.getMatches(player['puuid'])
+    totalMatches = len(league.matchIDs[0])
 
-        if totalMatches > 0:
-            for i in range(totalMatches):
-                matchKDA = league.retrieveMatchKDA(matchID=matchIDs[i], puuid=puuid)
-                kdaPerGame += matchKDA
+    # Retrieving each Match's Information
+    await league.retrieveAllMatchInfo(matchIDs=league.matchIDs[0], puuid=puuid)
 
-                wl = league.retrieveWinLoss(matchID=matchIDs[i], puuid=puuid)
-                if wl == True:
-                    wins += 1
-                else:
-                    losses += 1
+    # Calculating player's overall KDA across the last 20 matches played
+    # matchIDs = league.getMatchIDs(puuid=puuid)  # List of last 20 matches
+    # totalMatches = len(matchIDs)
+    kdaPerGame = 0
+    wins,losses = 0, 0
+    if totalMatches > 0:
+        for match in league.matchInfo:
+            # IDENTIFYING A PLAYER ID (PUUID) FOR THE MATCH
+            playerIndex = match['metadata']['participants'].index(puuid)
 
-            winloss = round(wins/losses, 2)
-            kdaPerGame /= totalMatches
-            kdaPerGame = round(kdaPerGame, 2)
+            # KDA CALCULATION
+            kda = match['info']['participants'][playerIndex]['challenges']['kda']
+            kdaPerGame += kda
 
-        embed = discord.Embed(
-            colour=discord.Color.blurple(),
-            title=f"Summoner {name}",
-            description="Recorded from the last ~20 games played"
+            # WIN/LOSS CALCULATION
+            wl_ratio = match['info']['participants'][playerIndex]['win']
+            if wl_ratio == True:
+                wins += 1
+            else:
+                losses += 1
+        
+        winloss = wins/losses
+        kdaPerGame /= totalMatches
+
+    embed = discord.Embed(
+        colour=discord.Color.blurple(),
+        title=f"Summoner {name}",
+        description="Recorded from the last ~20 games played"
         )
         # Level field
-        embed.add_field(
-            name="Level",
-            value=level,
-            inline=True
-        )
-        # Overall KDA per game field
-        embed.add_field(
-            name="Average KDA",
-            value=kdaPerGame,
-            inline=True
-        )
-        # Winrate percentage field (based on number of games won divided by all games played)
-        embed.add_field(
-            name="Average WinRate",
-            value=winloss,
-            inline=True
-        )
+    embed.add_field(
+        name="Level",
+        value=level,
+        inline=True
+    )
+    # Overall KDA per game field
+    embed.add_field(
+        name="Average KDA",
+        value=round(kdaPerGame,3),
+        inline=True
+    )
+    # Winrate percentage field (based on number of games won divided by all games played)
+    embed.add_field(
+        name="Average WinRate",
+        value=round(winloss,3),
+        inline=True
+    )
 
-        embed.set_thumbnail(
-            url="https://e0.pxfuel.com/wallpapers/8/121/desktop-wallpaper-suz-on-memes-beetlejuice-green-beetlejuice-lester-green.jpg")
+    embed.set_thumbnail(
+        url="https://e0.pxfuel.com/wallpapers/8/121/desktop-wallpaper-suz-on-memes-beetlejuice-green-beetlejuice-lester-green.jpg")
 
-        await ctx.send(embed=embed)
+    await ctx.send(embed=embed)
 
 
 bot.run("MTEzMTM3NDMzOTUxODkwMjM0Mg.GzMk0f.KaSXzD2FKkYRqpiezX5ukh30mUF4t6Ei987i8I")
