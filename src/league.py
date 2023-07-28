@@ -5,7 +5,14 @@ sys.path.insert(1,r"C:\Users\tents\LeagueBotV_0\hidden")
 import hiddenInfo
 
 API_KEY = hiddenInfo.LEAGUE_KEY
-REGION = hiddenInfo.DISCORD_KEY
+DISCORD_KEY = hiddenInfo.DISCORD_KEY
+# REGION = "na1"
+
+version = list()
+async def getVersion():
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"https://ddragon.leagueoflegends.com/api/versions.json")
+        version.append(await response.json())
 
 playerData = list()
 async def getPlayerInfo(summoner_name: str) -> str:

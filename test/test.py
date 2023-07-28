@@ -1,22 +1,33 @@
-import requests
+import league
+import hiddenInfo
 import aiohttp
 import discord
 from discord.ext import commands
 import asyncio
 import time
+import sys
+sys.path.insert(1, r"C:\\Users\\tents\\LeagueBotV_0\\hidden")
+sys.path.insert(1, r"C:\Users\tents\LeagueBotV_0\src")
 
-API_KEY = "RGAPI-6642c4d6-3c07-4755-bbdd-60969dfafebe"
 
+rankedIcons = []
+API_KEY = hiddenInfo.LEAGUE_KEY
+REGION = hiddenInfo.DISCORD_KEY
 
 start = time.time()
+
+version = list()
+
+
+async def getVersion():
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"https://ddragon.leagueoflegends.com/api/versions.json", ssl=False)
+        version.append(await response.json())
+
 playerData = list()
 
 
 async def getPuuid(summoner_name: str) -> str:
-    # response = requests.get(f"https://na1.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}?api_key={API_KEY}")
-    # data = response.json()
-    # return data['puuid']
-
     async with aiohttp.ClientSession() as session:
         response = await session.get(f"https://na1.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}?api_key={API_KEY}", ssl=False)
         playerData.append(await response.json())
@@ -24,39 +35,29 @@ async def getPuuid(summoner_name: str) -> str:
 matchIDs = list()
 
 
-async def getMatches(puuid: str, amount=15) -> list:
+async def getMatches(puuid: str, amount=15, gamemode="") -> list:
     async with aiohttp.ClientSession() as session:
-        response = await session.get(f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count={amount}&api_key={API_KEY}")
+        response = await session.get(f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?type={gamemode}&start=0&count={amount}&api_key={API_KEY}")
         matchIDs.append(await response.json())
 
 
 def get_tasks(session, matchIDs: list):
     tasks = []
     for i in range(len(matchIDs)):
-        # print(len(matchIDs))
-        # print(f"Match: {matchIDs[i]}")
         tasks.append(session.get(
             f"https://americas.api.riotgames.com/lol/match/v5/matches/{matchIDs[i]}?api_key={API_KEY}", ssl=False))
     return tasks
 
 
 matchInfo = list()
+
+
 async def retrieveAllMatchInfo(matchIDs: str, puuid: str) -> float:
     async with aiohttp.ClientSession() as session:
         tasks = get_tasks(session, matchIDs=matchIDs)
         responses = await asyncio.gather(*tasks)
         for response in responses:
             matchInfo.append(await response.json())
-
-# def retrieveWinLoss(matchID: str, puuid:str) -> bool:
-#     response = requests.get(f"https://americas.api.riotgames.com/lol/match/v5/matches/{matchID}?api_key={API_KEY}")
-#     if response.status_code == 200:
-#         matchInfo = response.json()
-#         playerIndex = matchInfo['metadata']['participants'].index(puuid)
-#         wl_ratio = matchInfo['info']['participants'][playerIndex]['win']
-#         return wl_ratio
-#     else:
-#         return response.status_code
 
 ################# TESTING PUUID #################
 
@@ -106,7 +107,7 @@ i = 0
 
 # Implementation of KDAs and Win/Loss Calculations
 kdaPerGame = 0
-wins,losses = 0, 0
+wins, losses = 0, 0
 if totalMatches > 0:
     for match in matchInfo:
         # IDENTIFYING A PLAYER ID (PUUID) FOR THE MATCH
@@ -122,32 +123,46 @@ if totalMatches > 0:
             wins += 1
         else:
             losses += 1
-    
+
     winloss = wins/losses
     kdaPerGame /= totalMatches
 
     print("Winloss:", winloss)
     print("KDA:", kdaPerGame)
+print("-------------------------END-------------------------\n")
 
+# IMPLEMENTATION OF MOST PLAYED POSITIONS AND CHAMPIONS
+positions = dict()
+champions = dict()
+if totalMatches > 0:
+    for match in matchInfo:
+        # IDENTIFYING A PLAYER ID (PUUID) FOR THE MATCH
+        playerIndex = match['metadata']['participants'].index(p)
+        # POSITION AND CHAMPION RECORDS
+        maxPosCounter, maxChampCounter = 0, 0
+        mostPlayedPos, mostPlayedChamp = "None", "None"
+        position = match['info']['participants'][playerIndex]['teamPosition']
+        champ = match['info']['participants'][playerIndex]['championName']
+        if position in positions:
+            positions[position] += 1
+        else:
+            positions[position] = 1
 
-# print(i)
-# if totalMatches > 0:
-#     for i in range(totalMatches):
-#         asyncio.run(retrieveMatchKDA(matchID=matchIDs[0][i], puuid=p))
-#         kdaPerGame += matchKDA
+        if champ in champions:
+            champions[champ] += 1
+        else:
+            champions[champ] = 1
 
-#         wl = retrieveWinLoss(matchID=matchIDs[i], puuid=p)
-#         if wl == True:
-#             wins+=1
-#         else:
-#             losses+=1
+        if maxPosCounter <= positions[position]:
+            maxPosCounter = positions[position]
+            mostPlayedPos = position
+        if maxChampCounter <= positions[position]:
+            maxChampCounter = positions[position]
+            mostPlayedChamp = champ
 
-#     winloss = wins/losses
-#     kdaPerGame /= totalMatches
+print("MOST PLAYED POSITION AND CHAMP:", mostPlayedPos, mostPlayedChamp)
+print("-------------------------END-------------------------\n")
 
-# print(winloss)
-# print(kdaPerGame)
-
-
-# res = requests.get("https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/_9Y2xOhOKoZO9BMgYko8o6Ao7WHg78OpTWWKmJnw1GdoPKs6QGd3_R0pUNPhGXbVVGZYDB5Pwwv7Qg/ids?start=0&count=20&api_key=RGAPI-6d554b70-e111-492e-a941-5ef893332960")
-# print(res.json())
+# TESTING DATADRAGON VERSION API CALL
+asyncio.run(getVersion())
+print("VERSION:", version[0][0])
