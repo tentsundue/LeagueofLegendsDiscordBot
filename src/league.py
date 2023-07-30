@@ -21,9 +21,9 @@ async def getPlayerInfo(summoner_name: str) -> str:
         playerData.append(await response.json())
 
 matchIDs = list()
-async def getMatches(puuid: str, amount=15) -> list:
+async def getMatches(puuid: str, amount=15, gamemode="") -> list:
     async with aiohttp.ClientSession() as session:
-        response = await session.get(f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count={amount}&api_key={API_KEY}")
+        response = await session.get(f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?type={gamemode}&start=0&count={amount}&api_key={API_KEY}")
         matchIDs.append(await response.json())
 
 
@@ -41,3 +41,7 @@ async def retrieveAllMatchInfo(matchIDs: str, puuid: str) -> float:
         responses = await asyncio.gather(*tasks)
         for response in responses:
             matchInfo.append(await response.json())
+
+def reset():
+    global version, playerData, matchIDs, matchInfo
+    version, playerData, matchIDs, matchInfo = list(), list(), list(), list()
