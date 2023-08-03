@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 import league
-import sys
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -16,7 +15,7 @@ EMBED_FAILURE_MSG.set_thumbnail(
 
 
 @bot.command()
-async def player(ctx, *, summoner_name: str):
+async def normal(ctx, *, summoner_name: str):
     league.reset()
 
     await league.getVersion()
@@ -32,7 +31,7 @@ async def player(ctx, *, summoner_name: str):
         profileIconId = player['profileIconId']
 
         # Getting all matches, defaulted at 15
-        await league.getMatches(player['puuid'])
+        await league.getMatches(player['puuid'], gamemode='normal')
         totalMatches = len(league.matchIDs[0])
 
         # Retrieving each Match's Information
@@ -157,9 +156,27 @@ async def ranked(ctx, *, summoner_name: str):
         level = player['summonerLevel']
         puuid = player['puuid']
         profileIconId = player['profileIconId']
+        summoner_ID = player['id']
+
+        # Retrieving Ranked Information
+        await league.retrieveRank(summoner_ID=summoner_ID)
+        if len(league.rankData[0]) == 0:
+            playerRank = "Not Yet Ranked"
+            totalMatches = 0
+            winloss = 0
+        else:
+            rankedInfo = league.rankData[0][0]
+            playerRank = rankedInfo['tier'] + ' ' + rankedInfo['rank']
+            wins, losses = int(rankedInfo['wins']), int(rankedInfo['losses'])
+            totalMatches = wins + losses
+            print(f"TOTAL MATCHES: {totalMatches}")
+            if losses == 0:
+                winloss = wins
+            else:
+                winloss = round(wins / losses, 3)
 
         # Getting all matches, defaulted at 15
-        await league.getMatches(player['puuid'],gamemode="ranked")
+        await league.getMatches(player['puuid'], amount=totalMatches, gamemode="ranked")
         totalMatches = len(league.matchIDs[0])
 
         # Retrieving each Match's Information
@@ -172,12 +189,10 @@ async def ranked(ctx, *, summoner_name: str):
     positions = dict()
     champions = dict()
     kills, deaths = 0, 0
-    wins, losses = 0, 0
     kdRatio = 0
-    winloss = 0
     mostPlayedChamp = "Unknown/Not enough Games Played"
     mostPlayedPos = "Unknown/Not enough Games Played"
-    
+
     if totalMatches > 0:
         for match in league.matchInfo:
             try:
@@ -187,13 +202,6 @@ async def ranked(ctx, *, summoner_name: str):
                 # KDA CALCULATION
                 kills += match['info']['participants'][playerIndex]['kills']
                 deaths += match['info']['participants'][playerIndex]['deaths']
-
-                # WIN/LOSS CALCULATION
-                wl_ratio = match['info']['participants'][playerIndex]['win']
-                if wl_ratio == True:
-                    wins += 1
-                else:
-                    losses += 1
 
                 # POSITION AND CHAMPION RECORDS
                 maxPosCounter, maxChampCounter = 0, 0
@@ -218,21 +226,24 @@ async def ranked(ctx, *, summoner_name: str):
                     mostPlayedChamp = champ
 
             except Exception as e:
-                print("Error calculating Player Stats:", e)
+                print("Error calculating Match Stats:", e)
                 await ctx.send(embed=EMBED_FAILURE_MSG)
                 break
 
-        if losses == 0:
-            winloss = wins
-        else:
-            winloss = wins/losses
         kdRatio = kills/deaths
 
-    embed = discord.Embed(
-        colour=discord.Color.blurple(),
-        title=f"Summoner {name}",
-        description="Recorded from the last (~15) games played"
-    )
+    if totalMatches == 0:
+        embed = discord.Embed(
+            colour=discord.Color.blurple(),
+            title=f"Summoner {name}",
+            description=f"{name} does not have any ranked games played recently"
+        )
+    else:
+        embed = discord.Embed(
+            colour=discord.Color.blurple(),
+            title=f"Summoner {name}",
+            description=f"Recorded from the last {totalMatches} games played"
+        )
     # Level field
     embed.add_field(
         name="Level",
@@ -264,12 +275,65 @@ async def ranked(ctx, *, summoner_name: str):
         inline=False
     )
 
+    embed.add_field(
+        name="Current Rank",
+        value=playerRank,
+        inline=False
+    )
+
     embed.set_thumbnail(
         url=f"https://ddragon.leagueoflegends.com/cdn/{version}/img/profileicon/{profileIconId}.png")
-    # embed.set_image(
+    # embed.set_image(():
+
     #     url=f"ddragon.leagueoflegends.com/cdn/12.4.1/img/champion/Aatrox.png"
     # )
     await ctx.send(embed=embed)
 
+
+@bot.command()
+async def freerotation(ctx):
+    league.reset()
+
+    await league.getVersion()
+    version = league.version[0][0]
+
+    # Retrieving a dictionary of Champion Ids as keys and each corresponding name as values
+    await league.getChampsByID(version)
+    champ_Id_to_Name = league.champ_Id_to_Name
+
+    # Retrieving All Free Champion Rotations
+    await league.retrieveRotations()
+    rotations = league.rotations[0]
+
+    maxNewPlayerLevel = 10
+    freeChamps = rotations['freeChampionIds']
+    freeChampsNew = rotations['freeChampionIdsForNewPlayers']
+
+    freeChampsDisplay = ""
+    freeChampsNewDisplay = ""
+    for ids in range(len(freeChamps)):
+        champConverted = champ_Id_to_Name[str(freeChamps[ids])]
+        freeChampsDisplay += f"{champConverted}\n"
+    for ids in range(len(freeChampsNew)):
+        champConvertedNew = champ_Id_to_Name[str(freeChampsNew[ids])]
+        freeChampsNewDisplay += f"{champConvertedNew}\n"
+
+    embed = discord.Embed(
+        colour=discord.Color.blurple(),
+        title="Free Champions Currently in Rotation",
+        description="Subject to change!"
+    )
+
+    embed.add_field(
+        name='Free Champs',
+        value=freeChampsDisplay,
+        inline=True
+    )
+    embed.add_field(
+        name='Free Champs (NEW PLAYERS ONLY)',
+        value=freeChampsNewDisplay,
+        inline=True
+    )
+    await ctx.send(embed=embed)
 
 bot.run(league.DISCORD_KEY)

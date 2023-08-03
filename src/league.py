@@ -42,6 +42,30 @@ async def retrieveAllMatchInfo(matchIDs: str, puuid: str) -> float:
         for response in responses:
             matchInfo.append(await response.json())
 
+rankData = list()
+async def retrieveRank(summoner_ID:str):
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"https://na1.api.riotgames.com/lol/league/v4/entries/by-summoner/{summoner_ID}?api_key={API_KEY}",ssl=False)
+        rankData.append(await response.json())
+
+rotations = list()
+async def retrieveRotations():
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"https://na1.api.riotgames.com/lol/platform/v3/champion-rotations?api_key={API_KEY}")
+        rotations.append(await response.json())
+
+
+champ_Id_to_Name = dict()
+async def getChampsByID(version: str):
+    champions = list()
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"http://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json")
+        champions.append(await response.json())
+
+    for champ_name, champ_data in champions[0]['data'].items():
+        champ_Id_to_Name[champ_data['key']] = champ_name
+
+
 def reset():
-    global version, playerData, matchIDs, matchInfo
-    version, playerData, matchIDs, matchInfo = list(), list(), list(), list()
+    global version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name
+    version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name = list(), list(), list(), list(), list(), dict()
