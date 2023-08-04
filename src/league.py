@@ -75,5 +75,5 @@ async def getChampMastery(summoner_ID: str):
 
 
 def reset():
-    global version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name, allChampsMastery
-    version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name, allChampsMastery = list(), list(), list(), list(), list(), dict(), list()
+    global version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name, champ_Name_to_ID, allChampsMastery
+    version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name, allChampsMastery = list(), list(), list(), list(), list(), dict(), dict(), list()
