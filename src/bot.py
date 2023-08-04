@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import league
-
+from datetime import datetime
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
@@ -35,7 +35,7 @@ async def normal(ctx, *, summoner_name: str):
         totalMatches = len(league.matchIDs[0])
 
         # Retrieving each Match's Information
-        await league.retrieveAllMatchInfo(matchIDs=league.matchIDs[0], puuid=puuid)
+        await league.retrieveAllMatchInfo(matchIDs=league.matchIDs[0])
     except Exception as e:
         print("Error calculating Player Stats:", e)
         await ctx.send(embed=EMBED_FAILURE_MSG)
@@ -151,7 +151,6 @@ async def ranked(ctx, *, summoner_name: str):
     try:
         await league.getPlayerInfo(summoner_name=summoner_name)
         player = league.playerData[0]
-        print(player)
         name = player['name']
         level = player['summonerLevel']
         puuid = player['puuid']
@@ -169,7 +168,6 @@ async def ranked(ctx, *, summoner_name: str):
             playerRank = rankedInfo['tier'] + ' ' + rankedInfo['rank']
             wins, losses = int(rankedInfo['wins']), int(rankedInfo['losses'])
             totalMatches = wins + losses
-            print(f"TOTAL MATCHES: {totalMatches}")
             if losses == 0:
                 winloss = wins
             else:
@@ -180,7 +178,7 @@ async def ranked(ctx, *, summoner_name: str):
         totalMatches = len(league.matchIDs[0])
 
         # Retrieving each Match's Information
-        await league.retrieveAllMatchInfo(matchIDs=league.matchIDs[0], puuid=puuid)
+        await league.retrieveAllMatchInfo(matchIDs=league.matchIDs[0])
     except Exception as e:
         print("Error calculating Player Stats:", e)
         await ctx.send(embed=EMBED_FAILURE_MSG)
@@ -336,4 +334,219 @@ async def freerotation(ctx):
     )
     await ctx.send(embed=embed)
 
+
+
+@bot.command()
+async def champmastery(ctx, *, summoner_name):
+    league.reset()
+
+    await league.getVersion()
+    version = league.version[0][0]
+
+    try:
+        await league.getPlayerInfo(summoner_name=summoner_name)
+        player = league.playerData[0]
+        name = player['name']
+        profileIconId = player['profileIconId']
+        summoner_ID = player['id']
+    except Exception as e:
+        print(f"Error with retrieving Player Data: {e}")
+        await ctx.send(embed=EMBED_FAILURE_MSG)
+
+    try:
+        await league.getChampMastery(summoner_ID=summoner_ID)
+        await league.getChampsByID(version)
+    except Exception as e:
+        print(f"Error with getting champ Info: {e}")
+        await ctx.send(EMBED_FAILURE_MSG)
+
+    top5champs = league.allChampsMastery[0][:5]
+    champ_Id_to_Name = league.champ_Id_to_Name
+    
+    embed = discord.Embed(
+        colour=discord.Color.blurple(),
+        title=f"{name}'s Top Champions"
+    )
+    counter = 1
+    mainChamp = list()
+    for champ in top5champs:
+        played = int(champ['lastPlayTime']) / 1000
+        timePlayed = datetime.fromtimestamp(played)
+        timePlayed = str(timePlayed).split()
+
+        # Converting the date from the written date
+        date = timePlayed[0].replace('-','')
+        date_object = datetime.strptime(str(date), "%Y%m%d")
+        written_date = date_object.strftime("%B %d, %Y")
+        
+        # Converting the time from military to standard time
+        time24Hr = timePlayed[1][:5]
+        time_object = datetime.strptime(time24Hr, "%H:%M")
+        time12Hr = time_object.strftime("%I:%M %p")
+        
+        # Retrieving the champ name from the id-to-name conversion dictionary
+        championName = champ_Id_to_Name[str(champ['championId'])]
+        championLevel = champ['championLevel']
+        championPoints = champ['championPoints']
+
+        if counter == 1:
+            mainChamp.append(championName)
+            mainChamp.append(str(champ['championId']))
+
+        embed.add_field(
+            name=f"Champion #{counter} - {championName}",
+            value=f"LEVEL: {championLevel}\nTOTAL POINTS: {championPoints}\nLAST PLAYED: {written_date} | {time12Hr}",
+            inline=True
+        )
+        counter += 1
+
+    embed.set_thumbnail(
+        url=f"https://ddragon.leagueoflegends.com/cdn/{version}/img/profileicon/{profileIconId}.png"
+    )
+
+    embed.set_footer(
+        text=f"This Person is a {mainChamp[0]} main!"
+    )
+    embed.set_image(
+    url=f"https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/{mainChamp[1]}.png"
+    )
+
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def champions(ctx):
+    league.reset()
+
+    await league.getVersion()
+    version = league.version[0][0]
+
+    await league.getChampsByID(version)
+
+    allChampsFirstHalf = ""
+    allChampsSecondHalf = ""
+    allChampsThirdHalf = ""
+    totalChamps = len(league.champ_Id_to_Name.values())
+    counter = 0
+    for champ in league.champ_Id_to_Name.values():
+        if counter < totalChamps / 3:
+            allChampsFirstHalf += f"{champ}\n"
+        elif counter < totalChamps - (totalChamps/3):
+            allChampsSecondHalf += f"{champ}\n"
+        else:
+            allChampsThirdHalf += f"{champ}\n"
+        counter += 1
+    
+    embed = discord.Embed(
+        color=discord.Color.dark_gold(),
+        title=f"All Current Champs as of Version {version}",
+        url="https://www.leagueoflegends.com/en-us/champions/"
+    )
+    
+    embed.add_field(
+        name=f"Champs 1 - {int(totalChamps/3)}",
+        value=allChampsFirstHalf,
+        inline=True
+    )
+    embed.add_field(
+        name=f"Champs {int(totalChamps/3) + 1} - {totalChamps - (int(totalChamps/3))}",
+        value=allChampsSecondHalf,
+        inline=True
+    )
+    embed.add_field(
+        name=f"Champs {totalChamps - (int(totalChamps/3)) + 1} - {totalChamps}",
+        value=allChampsThirdHalf,
+        inline=True
+    )
+    
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def champ(ctx, champion, summoner_name):
+    league.reset()
+
+    await league.getVersion()
+    version = league.version[0][0]
+
+    await league.getChampsByID(version)
+    try:
+        championId = league.champ_Name_to_ID[champion]
+    except Exception as e:
+        print("Error with obtaining champion ID:", e)
+        embedFailed = discord.Embed(
+            color=discord.Color.red(),
+            title="Sorry, I think you might have misspelled the champion Name",
+            description="Please try again."
+        )
+        embedFailed.set_thumbnail(
+            url="https://upload.wikimedia.org/wikipedia/commons/5/5f/Icon_Simple_Error.png"
+        )
+        await ctx.send(embed=embedFailed)
+    try:
+        await league.getPlayerInfo(summoner_name=summoner_name)
+        player = league.playerData[0]
+        puuid = player['puuid']
+    except Exception as e:
+        print("Error with obtaining player information:", e)
+        await ctx.send(embed=EMBED_FAILURE_MSG)
+
+    await league.getMatches(puuid=puuid,amount=20)
+    await league.retrieveAllMatchInfo(league.matchIDs[0])
+
+    counter = 0
+    kills, deaths = 0, 0
+    kdRatio = 0
+    wins, losses = 0, 0
+    winloss = 0
+    for match in league.matchInfo:
+        try:
+            playerIndex = match['metadata']['participants'].index(puuid)
+            if champion == match['info']['participants'][playerIndex]['championName']:
+                counter+=1            
+            kills += match['info']['participants'][playerIndex]['kills']
+            deaths += match['info']['participants'][playerIndex]['deaths']
+
+            # WIN/LOSS CALCULATION
+            wonGame = match['info']['participants'][playerIndex]['win']
+            if wonGame == True:
+                wins += 1
+            else:
+                losses += 1
+        except KeyError:
+            print(f"Skipping match due to missing 'metadata' key.")
+            continue
+
+    if losses == 0:
+        winloss = wins
+    else:
+        winloss = wins/losses
+
+    if deaths == 0:
+        kdRatio = kills
+    else:
+        kdRatio = kills/deaths
+
+    embed = discord.Embed(
+        color=discord.Color.blurple(),
+        title=f"{summoner_name}'s {champion} Stats",
+        description= "NOTE: if stats show 0, we might not have enough recent data to calculate from."
+    )
+
+    embed.add_field(
+        name="KDA",
+        value=round(kdRatio,2),
+        inline=True
+    )
+    embed.add_field(
+        name="W/L",
+        value=round(winloss,2),
+        inline=True
+    )
+    embed.set_thumbnail(
+        url=f"https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/{championId}.png"
+    )
+
+    await ctx.send(embed=embed)
+
+
+# Running the bot using the Discord Key
 bot.run(league.DISCORD_KEY)

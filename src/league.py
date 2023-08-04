@@ -35,7 +35,7 @@ def get_tasks(session, matchIDs: list):
     return tasks
 
 matchInfo = list()
-async def retrieveAllMatchInfo(matchIDs: str, puuid: str) -> float:
+async def retrieveAllMatchInfo(matchIDs: str) -> float:
     async with aiohttp.ClientSession() as session:
         tasks = get_tasks(session, matchIDs=matchIDs)
         responses = await asyncio.gather(*tasks)
@@ -56,6 +56,7 @@ async def retrieveRotations():
 
 
 champ_Id_to_Name = dict()
+champ_Name_to_ID = dict()
 async def getChampsByID(version: str):
     champions = list()
     async with aiohttp.ClientSession() as session:
@@ -64,8 +65,15 @@ async def getChampsByID(version: str):
 
     for champ_name, champ_data in champions[0]['data'].items():
         champ_Id_to_Name[champ_data['key']] = champ_name
+        champ_Name_to_ID[champ_name] = champ_data['key']
+
+allChampsMastery = list()
+async def getChampMastery(summoner_ID: str):
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(f"https://na1.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-summoner/{summoner_ID}?api_key={API_KEY}")
+        allChampsMastery.append(await response.json())
 
 
 def reset():
-    global version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name
-    version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name = list(), list(), list(), list(), list(), dict()
+    global version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name, allChampsMastery
+    version, playerData, matchIDs, matchInfo, rankData, champ_Id_to_Name, allChampsMastery = list(), list(), list(), list(), list(), dict(), list()
